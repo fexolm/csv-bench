@@ -42,11 +42,9 @@
 #include <unistd.h>
 #include <vector>
 
-#if defined(__SSE4_2__) && !defined(CSM_IGNORE_SSE42)
 #define CSM_USE_SSE42
 #include <emmintrin.h>
 #include <smmintrin.h>
-#endif // __SSE4_2__
 
 #ifdef USE_SPIRIT
 #include "boost/spirit/include/qi.hpp"
@@ -308,67 +306,6 @@ struct FieldPair {
   CsvCell **cell;
 };
 
-#ifndef CSM_USE_SSE42
-#warning Using non-SSE4.2 fallback implementation.
-/**
- * Callable that matches a set of up to 5 bytes (including NUL) in a 16 byte
- * string. The index 0..15 of the first occurrence is returned, otherwise 16 is
- * returned if no match is found or NUL is encountered.
- */
-struct StringSpannerFallback {
-  uint8_t charset_[256];
-
-  StringSpannerFallback(char c1 = 0, char c2 = 0, char c3 = 0, char c4 = 0) {
-    ::memset(charset_, 0, sizeof charset_);
-    charset_[(unsigned)c1] = 1;
-    charset_[(unsigned)c2] = 1;
-    charset_[(unsigned)c3] = 1;
-    charset_[(unsigned)c4] = 1;
-    charset_[0] = 1;
-  }
-
-  size_t operator()(const char *s) __attribute__((__always_inline__)) {
-    CSM_DEBUG("bitfield[32] = %d", charset_[32]);
-    CSM_DEBUG("span[0] = {%d,%d,%d,%d,%d,%d,%d,%d}", s[0], s[1], s[2], s[3],
-              s[4], s[5], s[6], s[7]);
-    CSM_DEBUG("span[1] = {%d,%d,%d,%d,%d,%d,%d,%d}", s[8], s[9], s[10], s[11],
-              s[12], s[13], s[14], s[15]);
-
-    auto p = (const unsigned char *)s;
-    auto e = p + 16;
-
-    do {
-      if (charset_[p[0]]) {
-        break;
-      }
-      if (charset_[p[1]]) {
-        p++;
-        break;
-      }
-      if (charset_[p[2]]) {
-        p += 2;
-        break;
-      }
-      if (charset_[p[3]]) {
-        p += 3;
-        break;
-      }
-      p += 4;
-    } while (p < e);
-
-    if (!*p) {
-      return 16; // PCMPISTRI reports NUL encountered as no match.
-    }
-
-    return p - (const unsigned char *)s;
-  }
-};
-
-using StringSpanner = StringSpannerFallback;
-#define CSM_ATTR_SSE42
-#endif // !CSM_USE_SSE42
-
-#ifdef CSM_USE_SSE42
 struct alignas(16) StringSpannerSse42 {
   __m128i v_;
 
@@ -386,7 +323,6 @@ struct alignas(16) StringSpannerSse42 {
 
 using StringSpanner = StringSpannerSse42;
 #define CSM_ATTR_SSE42 __attribute__((target("sse4.2")))
-#endif // CSM_USE_SSE42
 
 class CsvCursor {
 public:
