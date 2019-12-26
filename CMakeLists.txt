@@ -6,7 +6,6 @@ find_package(TBB REQUIRED tbb tbbmalloc tbbmalloc_proxy)
 
 include_directories(lib/ ${TBB_INCLUDE_DIR})
 
-add_executable (main src/main.cpp)
-add_executable (main2 src/main2.cpp)
+add_executable (main src/main.cpp src/table.cpp src/parser.cpp)
 
-target_link_libraries(main2 TBB::tbb TBB::tbbmalloc_proxy)
+target_link_libraries(main TBB::tbb TBB::tbbmalloc_proxy)
